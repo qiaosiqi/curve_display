@@ -1,0 +1,256 @@
+// MultiCurveGUI - Updated: auto-start selected curves, no stop functionality
+
+/*
+ * 文件结构：
+ *  src/
+ *    └── multicurve/
+ *         ├── Main.java
+ *         ├── MainFrame.java
+ *         ├── CurveData.java
+ *         ├── SinCurve.java
+ *         ├── CosCurve.java
+ *         ├── LinearCurve.java
+ *         ├── QuadCurve.java
+ *         ├── CurveCanvas.java
+ *         ├── CurveThread.java
+ *         └── CurveController.java
+ */
+
+// ---------------------------------------------
+// CurveData.java
+// 抽象接口，所有曲线类型实现它
+// ---------------------------------------------
+package multicurve;
+
+import java.awt.Color;
+
+public interface CurveData {
+    double getY(double x);
+    Color getColor();
+    String getName();
+}
+
+// ---------------------------------------------
+// SinCurve.java
+// y = sin(x)
+// ---------------------------------------------
+package multicurve;
+
+import java.awt.Color;
+
+public class SinCurve implements CurveData {
+    @Override public double getY(double x) { return Math.sin(x); }
+    @Override public Color getColor() { return Color.BLUE; }
+    @Override public String getName() { return "sin(x)"; }
+}
+
+// ---------------------------------------------
+// CosCurve.java
+// y = cos(x)
+// ---------------------------------------------
+package multicurve;
+
+import java.awt.Color;
+
+public class CosCurve implements CurveData {
+    @Override public double getY(double x) { return Math.cos(x); }
+    @Override public Color getColor() { return Color.RED; }
+    @Override public String getName() { return "cos(x)"; }
+}
+
+// ---------------------------------------------
+// LinearCurve.java
+// y = x
+// ---------------------------------------------
+package multicurve;
+
+import java.awt.Color;
+
+public class LinearCurve implements CurveData {
+    @Override public double getY(double x) { return x; }
+    @Override public Color getColor() { return Color.GREEN.darker(); }
+    @Override public String getName() { return "x"; }
+}
+
+// ---------------------------------------------
+// QuadCurve.java
+// y = x^2
+// ---------------------------------------------
+package multicurve;
+
+import java.awt.Color;
+
+public class QuadCurve implements CurveData {
+    @Override public double getY(double x) { return x * x; }
+    @Override public Color getColor() { return Color.MAGENTA; }
+    @Override public String getName() { return "x^2"; }
+}
+
+// ---------------------------------------------
+// CurveThread.java
+// 负责曲线数据更新与重绘调用
+// ---------------------------------------------
+package multicurve;
+
+import javax.swing.SwingUtilities;
+
+public class CurveThread extends Thread {
+    private final CurveData curve;
+    private final CurveCanvas canvas;
+    private volatile boolean running = true;
+    private double offset = 0;
+
+    public CurveThread(CurveData curve, CurveCanvas canvas) {
+        this.curve = curve;
+        this.canvas = canvas;
+    }
+
+    public void stopCurve() {
+        running = false;
+    }
+
+    @Override
+    public void run() {
+        while (running) {
+            offset += 0.1;
+            canvas.updateCurve(curve, offset);
+            SwingUtilities.invokeLater(canvas::repaint);
+            try { Thread.sleep(50); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+        }
+    }
+}
+
+// ---------------------------------------------
+// CurveCanvas.java
+// 绘图面板，绘制所有曲线
+// ---------------------------------------------
+package multicurve;
+
+import javax.swing.*;
+import java.awt.*;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
+public class CurveCanvas extends JPanel {
+    private final Map<CurveData, Double> curveOffsets = new ConcurrentHashMap<>();
+
+    public CurveCanvas() { setBackground(Color.WHITE); }
+
+    public void updateCurve(CurveData curve, double offset) {
+        curveOffsets.put(curve, offset);
+    }
+
+    @Override
+    protected void paintComponent(Graphics g) {
+        super.paintComponent(g);
+        Graphics2D g2 = (Graphics2D) g;
+        int w = getWidth(), h = getHeight();
+        g2.setColor(Color.GRAY);
+        g2.drawLine(0, h/2, w, h/2);
+        g2.drawLine(w/2, 0, w/2, h);
+        for (Map.Entry<CurveData, Double> e : curveOffsets.entrySet()) {
+            CurveData c = e.getKey(); double off = e.getValue();
+            g2.setColor(c.getColor());
+            for (int x = 0; x < w; x++) {
+                double x1 = (x + off) * 0.05;
+                double x2 = (x + 1 + off) * 0.05;
+                int y1 = (int)(h/2 - c.getY(x1)*50);
+                int y2 = (int)(h/2 - c.getY(x2)*50);
+                g2.drawLine(x, y1, x+1, y2);
+            }
+        }
+    }
+}
+
+// ---------------------------------------------
+// CurveController.java
+// 每条曲线的控制面板，选中即启动
+// ---------------------------------------------
+package multicurve;
+
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.ItemEvent;
+
+public class CurveController extends JPanel {
+    private final JComboBox<String> typeBox;
+    private CurveThread thread;
+
+    public CurveController(CurveCanvas canvas) {
+        setLayout(new FlowLayout());
+
+        typeBox = new JComboBox<>(new String[]{"sin", "cos", "x", "x^2"});
+        add(new JLabel("选择曲线："));
+        add(typeBox);
+
+        typeBox.addItemListener(e -> {
+            if (e.getStateChange() == ItemEvent.SELECTED) {
+                CurveData curve = createCurve((String) e.getItem());
+                thread = new CurveThread(curve, canvas);
+                thread.start();
+            }
+        });
+    }
+
+    private CurveData createCurve(String type) {
+        switch (type) {
+            case "sin": return new SinCurve();
+            case "cos": return new CosCurve();
+            case "x":   return new LinearCurve();
+            case "x^2": return new QuadCurve();
+            default:     return new SinCurve();
+        }
+    }
+}
+
+// ---------------------------------------------
+// MainFrame.java
+// 主窗口，组合画布和控制器
+// ---------------------------------------------
+package multicurve;
+
+import javax.swing.*;
+import java.awt.*;
+
+public class MainFrame extends JFrame {
+    private final CurveCanvas canvas;
+    private final JPanel controlPanel;
+
+    public MainFrame() {
+        setTitle("多曲线动态展示系统");
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setSize(800, 600);
+        setLayout(new BorderLayout());
+
+        canvas = new CurveCanvas();
+        add(canvas, BorderLayout.CENTER);
+
+        controlPanel = new JPanel();
+        controlPanel.setLayout(new BoxLayout(controlPanel, BoxLayout.Y_AXIS));
+        JScrollPane scroll = new JScrollPane(controlPanel);
+        scroll.setPreferredSize(new Dimension(200, 0));
+        add(scroll, BorderLayout.EAST);
+
+        JButton addBtn = new JButton("添加曲线");
+        addBtn.addActionListener(e -> {
+            CurveController c = new CurveController(canvas);
+            controlPanel.add(c);
+            controlPanel.revalidate();
+        });
+        add(addBtn, BorderLayout.SOUTH);
+    }
+}
+
+// ---------------------------------------------
+// Main.java
+// 入口类
+// ---------------------------------------------
+package multicurve;
+
+import javax.swing.SwingUtilities;
+
+public class Main {
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(() -> new MainFrame().setVisible(true));
+    }
+}
