@@ -21,10 +21,10 @@ public class CurveThread extends Thread {
         int w = canvas.getWidth();
         offset = -w / 2.0;
         while (running) {
-            offset += 0.1;
+            offset += 0.3;
             canvas.updateCurve(curve, offset);
             SwingUtilities.invokeLater(canvas::repaint);
-            try { Thread.sleep(50); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            try { Thread.sleep(30); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
         }
     }
 }
