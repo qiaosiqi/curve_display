@@ -1,0 +1,57 @@
+@startuml MultipleCurveDisplaySystem
+
+class Main {
+  + main(String[] args)
+}
+
+class CurveWindow {
+  - curvePanel: CurvePanel
+  + CurveWindow()
+}
+
+class CurvePanel {
+  - activeCurves: List<CurveData>
+  - maxPoints: int
+  - repaintTimer: Timer
+  - isPaused: boolean
+  - curveTimers: List<Timer>
+  + addCurve(String, DoubleUnaryOperator, Color)
+  + pauseAllCurves()
+  + resumeAllCurves()
+  + resetAllCurves()
+  + paintComponent(Graphics)
+}
+
+class CurveData {
+  - name: String
+  - func: DoubleUnaryOperator
+  - yValues: List<Double>
+  - x: double
+  - color: Color
+  + CurveData(String, DoubleUnaryOperator, Color)
+}
+
+interface DoubleUnaryOperator {
+  + applyAsDouble(double): double
+}
+
+Main --> CurveWindow : creates
+CurveWindow *-- CurvePanel : contains
+CurvePanel o-- CurveData : contains
+CurvePanel o-- Timer : uses
+CurveData ..> DoubleUnaryOperator : implements
+
+note top of CurvePanel
+  Responsible for drawing all curves
+  and managing animation timers
+end note
+
+note right of CurveData
+  Stores data for a single curve:
+  - Function definition
+  - Calculated points
+  - Current x position
+  - Display color
+end note
+
+@enduml
